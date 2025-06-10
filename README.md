@@ -1,2 +1,3 @@
 # cat_nav
-ROS2 enabled visual navigation for mobile robots
+
+This repository is under development. Release expected August 2025.
