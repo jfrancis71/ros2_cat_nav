@@ -22,7 +22,7 @@ source ./install/setup.bash
 
 ## Recording A Route
 
-```ros2 run cat_nav record_route --ros-args -p route_folder:=~/datasets/cat_nav/sunny_27_07_10_32```
+```ros2 run cat_nav record_route_node --ros-args -p route_folder:=~/datasets/cat_nav/sunny_27_07_10_32```
 
 The above command will create the route folder. You should then drive your robot around your desired route. When you have finished, Ctrl-C the program to stop it. There should now be a sequence of images in the route folder.
 
@@ -44,7 +44,7 @@ The above command will create the route folder. You should then drive your robot
 
 ## Follow Route
 
-```ros2 run cat_nav follow_route --ros-args -p route_folder:=~/datasets/cat_nav/sunny_27_07_10_32```
+```ros2 run cat_nav follow_route_node --ros-args -p route_folder:=~/datasets/cat_nav/sunny_27_07_10_32```
 
 The above command will cause the robot to drive along the route. It will broadcast TwistStamped messages on the /cmd_vel topic. It moves primarily forwards with small angular components to keep the robot on course. It will stop if the image it is receiving is too different from any of the snapshots it has stored. This is effectively a 'I am lost' state, and it stops to prevent damage. You can physically move the robot and as soon as it recognises a snapshot it will continue.
 
