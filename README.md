@@ -1,13 +1,15 @@
-# cat_nav
+# Cat Nav
 
 This repository is under development. Release expected August 2025.
-
-
-cat_nav is a package inspired by research on the desert ant Cataglyphis.
 
 You drive the mobile robot around a course while the robot records regular visual snapshots. Now you can place the robot at the beginning of the course and the robot will follow the course. It uses the collection of snapshots to identify the closest snapshot and make minor course corrections to keep the robot on course.
 
 This type of task has been termed Visual Teach & Repeat (VT&R) (Tim Barfoot).
+
+This package is for a robot running ROS2 with a camera attached.
+
+cat_nav is inspired by research on how the desert ant Cataglyphis navigates. However there is very little attempt at biological plausibility, the focus here is more on exploring the computational principles of navigation.
+
 
 ## Installation
 
