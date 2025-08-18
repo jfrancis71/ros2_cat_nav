@@ -33,12 +33,12 @@ class LostDetector:
         dir_template = np.arctan2(sobel_x_template, sobel_y_template)
         dir_image = np.arctan2(sobel_x_image, sobel_y_image)
         m = (1 - np.exp(-mag_template/40))*4
-        edge_direction_error = vonmises(m, dir_template).logpdf(dir_image) - np.log(1.0/(2*np.pi))
-        edge_mag_error = (chi2(mag_template+1).logpdf(mag_image+1) - chi2(10).logpdf(mag_image+1))/20
-        return edge_direction_error, edge_mag_error
+        edge_direction_log_prob = vonmises(m, dir_template).logpdf(dir_image) - np.log(1.0/(2*np.pi))
+        edge_mag_log_prob = (chi2(mag_template+1).logpdf(mag_image+1) - chi2(10).logpdf(mag_image+1))/20
+        return edge_direction_log_prob, edge_mag_log_prob
 
-    def lost_error(self, edge_direction_error, edge_mag_error):
-        return edge_direction_error.sum() + edge_mag_error.sum()
+    def lost_error(self, edge_direction_log_prob, edge_mag_log_prob):
+        return edge_direction_log_prob.sum() + edge_mag_log_prob.sum()
 
     def diagnostic_image(self, offset, col_edge_direction_error, col_edge_mag_error):
         edge_direction_error = col_edge_direction_error.sum(axis=-1)
@@ -180,15 +180,15 @@ class CatNav(Node):
         pil_image = PILImage.fromarray(cv_image)
         image = np.array(pil_image.resize((32,32))).astype(np.float32)/256.
         image_idx, offset, next_offset, template_min = self.localizer.localize(image)
-        edge_direction_error, edge_mag_error = self.lost_detector.prediction_error(
+        edge_direction_log_prob, edge_mag_log_prob = self.lost_detector.prediction_error(
             offset, self.route_images[image_idx], image)
         if self.diagnostic_image_publisher:
             diagnostic_image = self.diagnostic_image(offset, image,
-                self.route_images[image_idx], edge_direction_error, edge_mag_error)
+                self.route_images[image_idx], edge_direction_log_prob, edge_mag_log_prob)
             diagnostic_image_msg = self.bridge.cv2_to_imgmsg((diagnostic_image*255).astype(np.uint8),
                                                        encoding="rgb8")
             self.diagnostic_image_publisher.publish(diagnostic_image_msg)
-        lost_min = self.lost_detector.lost_error(edge_direction_error, edge_mag_error)
+        lost_min = self.lost_detector.lost_error(edge_direction_log_prob, edge_mag_log_prob)
         info_msg = f'matched image idx {image_idx}, centered offset={offset-8}, template_min={template_min:.2f}, lost_edge={lost_min:.2f}'
         self.get_logger().info(info_msg)
         if lost_min < self.lost_edge_threshold:
