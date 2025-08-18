@@ -60,7 +60,7 @@ The above command will cause the robot to drive along the route. It will broadca
 |----|-------|-----------|
 |route_folder|./default_route_folder|Path to folder to sequence of route images|
 |route_loop|False|If False we stop when we have completed route. If True then if route is a loop we continue at beginning|
-|lost_edge_threshold|450|Threshold at which we consider ourselves "lost" and stop the robot|
+|lost_edge_threshold|450|Threshold at which we consider ourselves "lost" and stop the robot. If the log prob of the best located image is less than this threshold we assume we are lost.|
 |self_drive|True|If this is False do not issue drive commands, useful for debugging|
 |lost_seq_len|5|Number of consecutive "lost" states we have received before considering ourselves actually lost|
 |warning_time|.25|Maximum time allowed from camera time stamp message to issue drive command before issuing warning|
