@@ -13,16 +13,17 @@ from cv_bridge import CvBridge
 
 
 class LostDetector:
-    def __init__(self):
+    def __init__(self, match_width):
+        self.match_width = match_width
         self.heading_text = np.zeros([30, 513, 3]).astype(np.float32)
         font = cv2.FONT_HERSHEY_SIMPLEX
         cv2.putText(self.heading_text, 'Edge Orientation Error', (60, 20), font, .5, (1, 1, 1), 1, cv2.LINE_AA)
         cv2.putText(self.heading_text, 'Edge Magnitude Error', (280, 20), font, .5, (1, 1, 1), 1, cv2.LINE_AA)
 
     def prediction_error(self, offset, template, image):
-        template_centre_image = template[:, offset: offset + 16]
+        template_centre_image = template[:, offset: offset + self.match_width]
         template_norm = template_centre_image/template.mean()
-        centre_image = image[:, 8:24].astype(np.float32)
+        centre_image = image[:, 16-self.match_width//2:16+self.match_width//2].astype(np.float32)
         image_norm = centre_image/centre_image.mean()
         sobel_x_template = cv2.Sobel(template_norm, cv2.CV_64F, 1, 0, ksize=5)
         sobel_y_template = cv2.Sobel(template_norm, cv2.CV_64F, 0, 1, ksize=5)
@@ -38,20 +39,20 @@ class LostDetector:
         return edge_direction_log_prob, edge_mag_log_prob
 
     def lost_error(self, edge_direction_log_prob, edge_mag_log_prob):
-        return edge_direction_log_prob.sum() + edge_mag_log_prob.sum()
+        return edge_direction_log_prob.mean() + edge_mag_log_prob.mean()
 
     def diagnostic_image(self, offset, col_edge_direction_error, col_edge_mag_error):
         edge_direction_error = col_edge_direction_error.sum(axis=-1)
         edge_mag_error = col_edge_mag_error.sum(axis=-1)
-        resized_angle_error = cv2.resize(edge_direction_error, (128, 256), interpolation=cv2.INTER_NEAREST)
-        resized_mag_error = cv2.resize(edge_mag_error, (128, 256), interpolation=cv2.INTER_NEAREST)
+        resized_angle_error = cv2.resize(edge_direction_error, (int(256*self.match_width/32), 256), interpolation=cv2.INTER_NEAREST)
+        resized_mag_error = cv2.resize(edge_mag_error, (int(256*self.match_width/32), 256), interpolation=cv2.INTER_NEAREST)
         diagnostic_angle_error = np.zeros([256, 256, 3]).astype(np.float32)
         scale = int(256/32)
-        diagnostic_angle_error[:, offset*scale:(offset+16)*scale, 2] = np.clip(resized_angle_error/2.0, 0.0, 1.0)
-        diagnostic_angle_error[:, offset*scale:(offset+16)*scale, 0] = np.clip(-resized_angle_error / 2.0, 0.0, 1.0)
+        diagnostic_angle_error[:, offset*scale:(offset+self.match_width)*scale, 2] = np.clip(resized_angle_error/2.0, 0.0, 1.0)
+        diagnostic_angle_error[:, offset*scale:(offset+self.match_width)*scale, 0] = np.clip(-resized_angle_error / 2.0, 0.0, 1.0)
         diagnostic_mag_error = np.zeros([256, 256, 3]).astype(np.float32)
-        diagnostic_mag_error[:, offset*scale:(offset+16)*scale, 2] = np.clip(resized_mag_error, 0.0, 1.0)
-        diagnostic_mag_error[:, offset*scale:(offset+16)*scale, 0] = np.clip(-resized_mag_error, 0.0, 1.0)
+        diagnostic_mag_error[:, offset*scale:(offset+self.match_width)*scale, 2] = np.clip(resized_mag_error, 0.0, 1.0)
+        diagnostic_mag_error[:, offset*scale:(offset+self.match_width)*scale, 0] = np.clip(-resized_mag_error, 0.0, 1.0)
         cv2.line(diagnostic_angle_error, (8*16, 0), (8*16, 256), color=(0, .7, .7))
         cv2.line(diagnostic_mag_error, (8 * 16, 0), (8 * 16, 256), color=(0, .7, .7))
         divider = np.zeros([256, 1, 3]).astype(np.float32)
@@ -63,10 +64,11 @@ class LostDetector:
 
 
 class Localizer:
-    def __init__(self, route_images):
+    def __init__(self, route_images, match_width):
         self.blur = 1
+        self.match_width = match_width
         filtered = gaussian_filter(route_images, sigma=(0, self.blur, self.blur, 0))
-        sld_route_images = np.lib.stride_tricks.sliding_window_view(filtered, window_shape=(32, 16, 3), axis=(1, 2, 3))[:, 0, :, 0]
+        sld_route_images = np.lib.stride_tricks.sliding_window_view(filtered, window_shape=(32, match_width, 3), axis=(1, 2, 3))[:, 0, :, 0]
         self.norm_sld_route_images = sld_route_images/sld_route_images.mean(axis=(2,3,4))[:,:,np.newaxis, np.newaxis, np.newaxis]
         self.last_image_idx = route_images.shape[0]-1
         self.heading_text = np.zeros([30, 513, 3]).astype(np.float32)
@@ -75,7 +77,7 @@ class Localizer:
         cv2.putText(self.heading_text, 'Best Template Match', (280, 20), font, .5, (1, 1, 1), 1, cv2.LINE_AA)
 
     def localize(self, image):
-        centre_image = image[:, 8:24].astype(np.float32)
+        centre_image = image[:, 16-self.match_width//2:16+self.match_width//2].astype(np.float32)
         smoothed_image = gaussian_filter(centre_image, sigma=(self.blur, self.blur, 0))
         norm_image = smoothed_image/smoothed_image.mean()
         image_diffs = ((norm_image - self.norm_sld_route_images)**2).mean(axis=(2,3,4))
@@ -90,11 +92,15 @@ class Localizer:
         resized_template = cv2.resize(template, (256, 256), interpolation=cv2.INTER_NEAREST)
         divider = np.zeros([256, 1, 3]).astype(np.float32)
         divider[:, :, 1] = 1.0
-        cv2.line(resized_image, (64, 0), (64, 256), color=(0, .7, .7))
-        cv2.line(resized_image, (64+128, 0), (64+128, 256), color=(0, .7, .7))
+        left_side_image= 16 - self.match_width//2
+        right_side_image = 16 + self.match_width//2
+        left_resized = int((left_side_image/32)*256)
+        right_resized = int((right_side_image/32)*256)
+        cv2.line(resized_image, (left_resized, 0), (left_resized, 256), color=(0, .7, .7))
+        cv2.line(resized_image, (right_resized, 0), (right_resized, 256), color=(0, .7, .7))
         scale = int(256/32)
         cv2.line(resized_template, (offset * scale, 0), (offset * scale, 256), color=(0, .7, .7))
-        cv2.line(resized_template, ((offset+16) * scale, 0), ((offset+16) * scale, 256), color=(0, .7, .7))
+        cv2.line(resized_template, ((offset+self.match_width) * scale, 0), ((offset+self.match_width) * scale, 256), color=(0, .7, .7))
         diagnostic_image = cv2.hconcat([resized_image, divider, resized_template])
         cv2.line(diagnostic_image, (0, 16*8), (512, 16*8), color=(0, .7, .7))
         canvas = cv2.vconcat([self.heading_text, diagnostic_image])
@@ -115,7 +121,7 @@ class CatNav(Node):
         super().__init__("cat_nav")
         self.declare_parameter('route_folder', './default_route_folder')
         self.declare_parameter('route_loop', False)
-        self.declare_parameter('lost_edge_threshold', 450.0)
+        self.declare_parameter('lost_edge_threshold', 0.3)
         self.declare_parameter('self_drive', True)
         self.declare_parameter('lost_seq_len', 5)
         self.declare_parameter('warning_time', .25)
@@ -123,6 +129,7 @@ class CatNav(Node):
         self.declare_parameter('angle_ratio', 36.)
         self.declare_parameter('stop_on_last', 5)
         self.declare_parameter('forward_speed', .05)
+        self.declare_parameter('match_width', 16)
         route_folder = self.get_parameter('route_folder').get_parameter_value().string_value
         self.route_loop = self.get_parameter('route_loop').get_parameter_value().bool_value
         self.lost_edge_threshold = self.get_parameter('lost_edge_threshold').get_parameter_value().double_value
@@ -132,6 +139,7 @@ class CatNav(Node):
         self.angle_ratio = self.get_parameter('angle_ratio').get_parameter_value().double_value
         self.stop_on_last = self.get_parameter('stop_on_last').get_parameter_value().integer_value
         self.forward_speed = self.get_parameter('forward_speed').get_parameter_value().double_value
+        self.match_width = self.get_parameter('match_width').get_parameter_value().integer_value
         self.route_images = load_images(route_folder)
         self.last_image_idx = self.route_images.shape[0]-1
         # Let's start assuming lost; we'll reset this later in image_callback if good match found
@@ -147,8 +155,8 @@ class CatNav(Node):
         else:
             self.diagnostic_image_publisher = None
         self.bridge = CvBridge()
-        self.localizer = Localizer(self.route_images)
-        self.lost_detector = LostDetector()
+        self.localizer = Localizer(self.route_images, self.match_width)
+        self.lost_detector = LostDetector(self.match_width)
         self.get_logger().info("Node has started.")
 
     def publish_twist(self, header, twist_linear_x, twist_angular_z):
@@ -189,7 +197,8 @@ class CatNav(Node):
                                                        encoding="rgb8")
             self.diagnostic_image_publisher.publish(diagnostic_image_msg)
         lost_min = self.lost_detector.lost_error(edge_direction_log_prob, edge_mag_log_prob)
-        info_msg = f'matched image idx {image_idx}, centered offset={offset-8}, template_min={template_min:.2f}, lost_edge={lost_min:.2f}'
+        centre_sliding_window = (32-self.match_width)//2
+        info_msg = f'matched image idx {image_idx}, centered offset={offset-centre_sliding_window}, template_min={template_min:.2f}, lost_edge={lost_min:.2f}'
         self.get_logger().info(info_msg)
         if lost_min < self.lost_edge_threshold:
             self.lost_counter += 1
@@ -197,7 +206,8 @@ class CatNav(Node):
             self.lost_counter = 0
         if self.self_drive and self.lost_counter < self.lost_seq_len and (image_idx < self.last_image_idx-self.stop_on_last or self.route_loop):
             twist_linear_x = self.forward_speed
-            twist_angular_z = (next_offset-8)/self.angle_ratio
+            centre_window = (32-self.match_width)//2
+            twist_angular_z = (next_offset-centre_window)/self.angle_ratio
             self.publish_twist(image_msg.header, twist_linear_x, twist_angular_z)
         self.timing_warnings(image_msg.header.stamp, time_received)
 
