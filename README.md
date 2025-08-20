@@ -125,3 +125,6 @@ MIT Robotics – Tim Barfoot - Robot Navigation When Lighting, Weather, and Geom
 Tim Barfoot (2024)
 https://www.youtube.com/watch?v=oelXylttvS4&t=2618s
 
+Investigating ant navigation using spiking neural networks and robots
+Oluwaseyi Jesusanmi
+https://www.youtube.com/watch?v=0AZzu_d7I_8
